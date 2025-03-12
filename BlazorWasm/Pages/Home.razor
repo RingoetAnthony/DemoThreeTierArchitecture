@@ -1,0 +1,115 @@
+﻿@page "/"
+@using BLL.DTOs
+@using BLL.Entities
+@using NetcodeHub.Packages.Components.Toast
+@using NetcodeHub.Packages.Components.Modal
+@using BlazorWasm.Services
+@using NetcodeHub.Packages.Components.Validations.OnInput
+@inject IEmployeeService emp
+@inject ToastService toastService
+
+<div class="row">
+    <div class="col-lg-6">
+        <EditForm Model="employee" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <FloatingText @bind-Value="employee.Name"
+            Label="Custom Fullname"
+            Placeholder="John Doed"
+            class="form-control mb-3"/>
+            <ValidationMessage For="()=>employee.Name" />
+
+            <FloatingText @bind-Value="employee.Address"
+            Label="Custom Address"
+            Placeholder="eg. Rue des cerisier Paris France"
+            class="form-control mb-3"/>
+            <ValidationMessage For="()=>employee.Address" />
+
+            <button class="btn btn-primary mt-5 mb-5" type="submit">Save</button>
+        </EditForm>
+    </div>
+    <div class="col-lg-6">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>NAME</th>
+                    <th>ADDRESS</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Employees is not null)
+                {
+                    foreach (var item in Employees)
+                    {
+                        <tr>
+                            <td>@item.Id</td>
+                            <td>@item.Name</td>
+                            <td>@item.Address</td>
+                            <td>
+                                <button class="btn btn-info btn-sm" @onclick="() =>EditClicked(item)">Edit</button>
+                                <button class="btn btn-danger btn-sm" @onclick="() =>DeleteClicked(item.Id)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+<Confirmation @ref="confirmation"
+Instruction="@Instruction"
+Action="Handle"
+BoostrapClass="border-danger"
+CustomStyle="width:300px;"/>
+
+<Toast Duration="@duration" Persist="true" @ref="toastService.ToastComponent" />
+
+@code {
+    Employee employee = new();
+
+    Confirmation? confirmation;
+    string Instruction = "Are you sure you wanne to this ?";
+    int duration = 4000;
+
+    async Task Save()
+    {
+        var response = new ServiceResponse(false, null!);
+        if (employee.Id > 0)
+            response = await emp.UpdateAsync(employee);
+        else
+            response = await emp.AddAsync(employee);
+
+        if(!response.Flag)
+        {
+            duration = 5000;
+            toastService.ShowErrorToast("Alert", response.Message);
+            return;
+        }
+
+        toastService.ShowSuccessToast("Success", response.Message);
+        await GetData();
+        employee = new();
+    }
+
+    List<Employee> Employees = new();
+    protected override async Task OnInitializedAsync() => await GetData();
+    private async Task GetData() => Employees = await emp.GetAsync();
+    void EditClicked(Employee incomEmp) => employee = incomEmp;
+
+    public int DeleteId { get; set; }
+    async void DeleteClicked(int id)
+    {
+        DeleteId = id;
+        await confirmation!.Show();
+    }
+    async Task Handle()
+    {
+        if (DeleteId == 0) return;
+
+        var (flag, message) = await emp.DeleteAsync(DeleteId);
+        await GetData();
+        DeleteId = 0;
+        employee = new();
+        StateHasChanged();
+    }
+}
